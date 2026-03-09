@@ -781,6 +781,11 @@
                 max-width: 200px;
             }
         }
+
+        .storage-warning { display: none; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.35); border-radius: 10px; padding: 10px 14px; margin-bottom: 18px; color: white; font-size: 0.82rem; line-height: 1.5; text-align: center; }
+        .storage-warning.visible { display: block; }
+        .storage-warning strong { display: block; font-size: 0.88rem; margin-bottom: 3px; }
+        .storage-warning span { opacity: 0.85; }
     </style>
 </head>
 
@@ -795,6 +800,11 @@
             <img src="./icons/eorla.jpeg" alt="EORLA" class="header-logo">
             <h1>Launcher</h1>
             <p>Quick access to tools and resources</p>
+        </div>
+
+        <div class="storage-warning" id="storageWarning">
+            <strong>&#9888;&#xFE0E; Data won't be saved this session</strong>
+            <span>Browser storage is blocked — possibly private/InPrivate mode, a browser policy, or a locked browser profile. Try restarting your browser. Your changes work normally this session but won't persist when you close this tab.</span>
         </div>
 
         <div class="dashboard" id="dashboard">
@@ -1074,8 +1084,24 @@
             return luminance > 0.5 ? '#000000' : '#ffffff';
         }
 
+        function storageAvailable() {
+            try {
+                localStorage.setItem('__storage_test__', '1');
+                localStorage.removeItem('__storage_test__');
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function showStorageWarning() {
+            var el = document.getElementById('storageWarning');
+            if (el) el.classList.add('visible');
+        }
+
         // Initialize
         async function init() {
+            if (!storageAvailable()) showStorageWarning();
             loadPolicyClicks(); // Load policy click data FIRST
             await loadDefaultData();
             loadUserData();
@@ -1265,8 +1291,11 @@
         function loadUserData() {
             const savedData = localStorage.getItem('workspaceData');
             if (savedData) {
-                const parsed = JSON.parse(savedData);
-                links = parsed.links || [];
+                let parsed;
+                try { parsed = JSON.parse(savedData); }
+                catch (e) { console.warn('loadUserData: corrupt localStorage, resetting', e); parsed = null; }
+                if (parsed && parsed.links) {
+                links = parsed.links;
 
                 // Smart merge: Add any NEW links from data.json that user doesn't have
                 const userLinkIds = links.map(l => l.id);
@@ -1291,6 +1320,10 @@
                 });
 
                 saveUserData(); // Save merged data
+                } else {
+                    // Corrupt or empty saved data — fall through to defaults
+                    links = defaultData.links.map(link => ({ ...link, clicks: 0, isCustom: false }));
+                }
             } else {
                 // First time: load defaults
                 links = defaultData.links.map(link => ({ ...link, clicks: 0, isCustom: false }));
@@ -1302,7 +1335,8 @@
 
         // Save user data to localStorage
         function saveUserData() {
-            localStorage.setItem('workspaceData', JSON.stringify({ links }));
+            try { localStorage.setItem('workspaceData', JSON.stringify({ links })); }
+            catch (e) { console.warn('saveUserData: localStorage write failed', e); }
         }
 
         // Load policy clicks from localStorage
@@ -1328,8 +1362,10 @@
 
         // Save policy clicks to localStorage
         function savePolicyClicks() {
-            localStorage.setItem('policyClicks', JSON.stringify(policyClicks));
-            localStorage.setItem('docNumberClicks', JSON.stringify(docNumberClicks));
+            try {
+                localStorage.setItem('policyClicks', JSON.stringify(policyClicks));
+                localStorage.setItem('docNumberClicks', JSON.stringify(docNumberClicks));
+            } catch (e) { console.warn('savePolicyClicks: localStorage write failed', e); }
         }
 
         // Get click count for a policy by GUID
@@ -1630,7 +1666,8 @@
 
         // Filter policies
         function filterPolicies() {
-            localStorage.setItem('policyFolderFilter', document.getElementById('folderFilter').value);
+            try { localStorage.setItem('policyFolderFilter', document.getElementById('folderFilter').value); }
+            catch (e) { console.warn('filterPolicies: localStorage write failed', e); }
             renderPolicies();
             toggleFilterClearButtons();
         }
@@ -1997,7 +2034,8 @@
         }
 
         function saveNotepadNotes() {
-            localStorage.setItem('notepadNotes', JSON.stringify(notepadNotes));
+            try { localStorage.setItem('notepadNotes', JSON.stringify(notepadNotes)); }
+            catch (e) { console.warn('saveNotepadNotes: localStorage write failed', e); }
         }
 
         // Open the notepad modal (called from corner button or anywhere)
